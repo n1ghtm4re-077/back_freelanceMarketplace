@@ -4,7 +4,9 @@ from sqlalchemy import (
     ARRAY, UniqueConstraint
 )
 from sqlalchemy import func
-from backend import Base
+
+from backend.app.database import Base
+
 
 class User(Base):
     __tablename__ = 'users'

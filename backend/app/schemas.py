@@ -28,6 +28,7 @@ class AssignmentStatusEnum(str, Enum):
     disputed = "disputed"
 
 
+# ========== Base Models ==========
 class UserBase(BaseModel):
     email: str
     first_name: str
@@ -39,7 +40,7 @@ class FreelancerProfileBase(BaseModel):
     portfolio_links: Optional[List[str]] = []
 
 class EmployerProfileBase(BaseModel):
-    pass
+    pass  # Можно расширить позже
 
 class TaskBase(BaseModel):
     title: str
@@ -55,7 +56,6 @@ class TaskBase(BaseModel):
 
 class BidBase(BaseModel):
     task_id: int
-    freelancer_id: int
     amount: float
     comment: Optional[str] = None
 
@@ -66,11 +66,10 @@ class ChatBase(BaseModel):
 
 class MessageBase(BaseModel):
     chat_id: int
-    sender_id: int
     content: str
 
 
-#create models
+# ========== Create Models ==========
 class UserCreate(UserBase):
     password: str
 
@@ -84,24 +83,29 @@ class TaskCreate(TaskBase):
     employer_id: int
 
 class BidCreate(BidBase):
-    pass
+    pass  # freelancer_id будет браться из текущего пользователя через auth
 
 class ChatCreate(ChatBase):
     pass
 
 class MessageCreate(MessageBase):
-    pass
+    pass  # sender_id берётся из JWT токена
 
 class ReviewCreate(BaseModel):
     task_id: int
-    reviewer_id: int
     reviewed_user_id: int
     rating: int
     comment: Optional[str] = None
     is_positive: bool
 
+class NotificationCreate(BaseModel):
+    user_id: int
+    message: str
+    related_entity_type: str
+    related_entity_id: Optional[int] = None
 
-#update models
+
+# ========== Update Models ==========
 class TaskUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
@@ -123,8 +127,13 @@ class AssignedTaskUpdate(BaseModel):
 class ReviewUpdate(BaseModel):
     rating: Optional[int] = None
     comment: Optional[str] = None
+    is_positive: Optional[bool] = None
+
+class NotificationUpdate(BaseModel):
+    is_read: bool
 
 
+# ========== Response Models ==========
 class UserResponse(UserBase):
     user_id: int
     created_at: datetime
@@ -135,10 +144,9 @@ class UserResponse(UserBase):
     class Config:
         orm_mode = True
 
-class FreelancerProfileResponse(BaseModel):
+class FreelancerProfileResponse(FreelancerProfileBase):
     profile_id: int
     user_id: int
-    skills: List[str]
     rating: float
     positive_reviews: int
     negative_reviews: int
@@ -149,7 +157,7 @@ class FreelancerProfileResponse(BaseModel):
     class Config:
         orm_mode = True
 
-class EmployerProfileResponse(BaseModel):
+class EmployerProfileResponse(EmployerProfileBase):
     profile_id: int
     user_id: int
     rating: float
@@ -173,6 +181,7 @@ class CategoryResponse(BaseModel):
 class TaskResponse(TaskBase):
     task_id: int
     employer_id: int
+    freelancer_id: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -201,19 +210,6 @@ class AssignedTaskResponse(BaseModel):
     class Config:
         orm_mode = True
 
-class ReviewResponse(BaseModel):
-    review_id: int
-    task_id: int
-    reviewer_id: int
-    reviewed_user_id: int
-    rating: int
-    comment: Optional[str] = None
-    is_positive: bool
-    created_at: datetime
-
-    class Config:
-        orm_mode = True
-
 class ChatResponse(ChatBase):
     chat_id: int
     created_at: datetime
@@ -224,7 +220,21 @@ class ChatResponse(ChatBase):
 
 class MessageResponse(MessageBase):
     message_id: int
+    sender_id: int
     is_read: bool
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+class ReviewResponse(BaseModel):
+    review_id: int
+    task_id: int
+    reviewer_id: int
+    reviewed_user_id: int
+    rating: int
+    comment: Optional[str] = None
+    is_positive: bool
     created_at: datetime
 
     class Config:
@@ -242,7 +252,8 @@ class NotificationResponse(BaseModel):
     class Config:
         orm_mode = True
 
-#модели для авторизации
+
+# ========== Авторизация ==========
 class Token(BaseModel):
     access_token: str
     token_type: str

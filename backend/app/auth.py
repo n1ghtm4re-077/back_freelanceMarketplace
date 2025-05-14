@@ -7,30 +7,30 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
 from sqlalchemy.orm import Session
 
-from app.schemas import UserResponse
-from app.models import User
-from app.database import get_db
+from backend.app.schemas import TokenData
+from backend.app.models import User
+from backend.app.database import get_db
 
-# Настройки
-SECRET_KEY = "your-secret-key-here"  # Заменить на env в проде
+
+SECRET_KEY = "your-secret-key-here"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
-# Схема авторизации
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 
-# ========== Работа с паролями ==========
-def get_password_hash(password: str) -> str:
+#Хэширование паролей
+def verify_password(plain_password, hashed_password):
+    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+
+
+def get_password_hash(password):
     salt = bcrypt.gensalt()
-    return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
+    return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
 
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
-
-
-# ========== JWT Токены ==========
+#JWT Токены
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     if expires_delta:
@@ -42,11 +42,8 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return encoded_jwt
 
 
-# ========== Получение текущего пользователя ==========
-async def get_current_user(
-        token: str = Depends(oauth2_scheme),
-        db: Session = Depends(get_db)
-) -> UserResponse:
+#Получение текущего пользователя
+def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -57,10 +54,11 @@ async def get_current_user(
         email: str = payload.get("sub")
         if email is None:
             raise credentials_exception
+        token_data = TokenData(email=email)
     except JWTError:
         raise credentials_exception
 
-    user = db.query(User).filter(User.email == email).first()
+    user = db.query(User).filter(User.email == token_data.email).first()
     if user is None:
         raise credentials_exception
     return user

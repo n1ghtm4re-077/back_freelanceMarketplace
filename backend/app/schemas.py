@@ -3,7 +3,6 @@ from typing import Optional, List, Union
 from datetime import datetime
 from enum import Enum
 
-# ========== Enums ==========
 class UserTypeEnum(str, Enum):
     freelancer = "freelancer"
     employer = "employer"
@@ -29,7 +28,6 @@ class AssignmentStatusEnum(str, Enum):
     disputed = "disputed"
 
 
-# ========== Base Models ==========
 class UserBase(BaseModel):
     email: str
     first_name: str
@@ -41,7 +39,7 @@ class FreelancerProfileBase(BaseModel):
     portfolio_links: Optional[List[str]] = []
 
 class EmployerProfileBase(BaseModel):
-    pass  # Можно добавить поля позже
+    pass
 
 class TaskBase(BaseModel):
     title: str
@@ -72,7 +70,7 @@ class MessageBase(BaseModel):
     content: str
 
 
-# ========== Create Models ==========
+#create models
 class UserCreate(UserBase):
     password: str
 
@@ -103,7 +101,7 @@ class ReviewCreate(BaseModel):
     is_positive: bool
 
 
-# ========== Update Models ==========
+#update models
 class TaskUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
@@ -127,7 +125,6 @@ class ReviewUpdate(BaseModel):
     comment: Optional[str] = None
 
 
-# ========== Response Models ==========
 class UserResponse(UserBase):
     user_id: int
     created_at: datetime
@@ -244,3 +241,11 @@ class NotificationResponse(BaseModel):
 
     class Config:
         orm_mode = True
+
+#модели для авторизации
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class TokenData(BaseModel):
+    email: Optional[str] = None

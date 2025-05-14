@@ -10,7 +10,7 @@ load_dotenv()
 # Подключение к PostgreSQL
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://postgres:postgres@localhost:5432/freelance_hub"
+    "postgresql://postgres:postgres@db:5432/postgres"
 )
 
 engine = create_engine(DATABASE_URL)

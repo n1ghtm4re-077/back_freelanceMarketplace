@@ -28,7 +28,6 @@ class AssignmentStatusEnum(str, Enum):
     disputed = "disputed"
 
 
-# ========== Base Models ==========
 class UserBase(BaseModel):
     email: str
     first_name: str
@@ -69,7 +68,6 @@ class MessageBase(BaseModel):
     content: str
 
 
-# ========== Create Models ==========
 class UserCreate(UserBase):
     password: str
 
@@ -80,7 +78,16 @@ class EmployerProfileCreate(EmployerProfileBase):
     user_id: int
 
 class TaskCreate(TaskBase):
-    employer_id: int
+    title: str
+    description: str
+    budget_type: Optional[BudgetTypeEnum] = None
+    budget: Optional[float] = None
+    min_budget: Optional[float] = None
+    max_budget: Optional[float] = None
+    deadline: Optional[datetime] = None
+    requirements: Optional[str] = None
+    category_id: Optional[int] = None
+    status: TaskStatusEnum = TaskStatusEnum.open
 
 class BidCreate(BidBase):
     pass  # freelancer_id будет браться из текущего пользователя через auth
@@ -105,7 +112,6 @@ class NotificationCreate(BaseModel):
     related_entity_id: Optional[int] = None
 
 
-# ========== Update Models ==========
 class TaskUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
@@ -133,9 +139,12 @@ class NotificationUpdate(BaseModel):
     is_read: bool
 
 
-# ========== Response Models ==========
 class UserResponse(UserBase):
     user_id: int
+    email: str
+    first_name: str
+    last_name: str
+    user_type: str
     created_at: datetime
     updated_at: Optional[datetime] = None
     last_online: Optional[datetime] = None
@@ -180,6 +189,16 @@ class CategoryResponse(BaseModel):
 
 class TaskResponse(TaskBase):
     task_id: int
+    title: str
+    description: str
+    budget_type: Optional[str] = None
+    budget: Optional[float] = None
+    min_budget: Optional[float] = None
+    max_budget: Optional[float] = None
+    deadline: Optional[datetime] = None
+    requirements: Optional[str] = None
+    category_id: Optional[int] = None
+    status: str
     employer_id: int
     freelancer_id: Optional[int] = None
     created_at: datetime
@@ -253,7 +272,6 @@ class NotificationResponse(BaseModel):
         orm_mode = True
 
 
-# ========== Авторизация ==========
 class Token(BaseModel):
     access_token: str
     token_type: str

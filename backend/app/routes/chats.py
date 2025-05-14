@@ -1,47 +1,47 @@
-from fastapi import APIRouter, Depends, HTTPException
+import os
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, status
+from jose import jwt
 from sqlalchemy.orm import Session
 
-from backend.app.models import Chat, Message, User, Task, Notification
-from backend.app.schemas import ChatCreate, ChatResponse, MessageCreate, MessageResponse
+from backend.app.models import Chat, Task, Message, User
+from backend.app.schemas import ChatCreate, MessageCreate, MessageResponse
 from backend.app.auth import get_current_user
 from backend.app.database import get_db
+from backend.app.models import Notification
+from backend.app.routes.notifications import create_notification
 
 router = APIRouter(prefix="/chats", tags=["Chats"])
 
-@router.post("/", response_model=ChatResponse)
+
+@router.post("/", response_model=dict)
 def create_chat(
     chat_data: ChatCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """
-    Создать новый чат между двумя пользователями.
-    Чат связан с конкретной задачей.
+    Создание чата между участниками задачи
     """
-    # Проверяем, что пользователь не создаёт чат сам с собой
-    if chat_data.user1_id == chat_data.user2_id:
-        raise HTTPException(status_code=400, detail="You cannot create a chat with yourself")
-
-    # Проверяем, существует ли оба пользователя
-    user1 = db.query(User).filter(User.user_id == chat_data.user1_id).first()
-    user2 = db.query(User).filter(User.user_id == chat_data.user2_id).first()
-
-    if not user1 or not user2:
-        raise HTTPException(status_code=404, detail="One of the users not found")
-
-    # Проверяем, существует ли задача
     task = db.query(Task).filter(Task.task_id == chat_data.task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    # Проверяем, является ли пользователь участником задачи
-    if current_user.user_id not in [task.employer_id, task.freelancer_id]:
-        raise HTTPException(status_code=403, detail="You are not a participant of this task")
+    if current_user.user_type == "freelancer":
+        user2_id = task.employer_id
+    elif current_user.user_type == "employer":
+        user2_id = task.freelancer_id
+    else:
+        raise HTTPException(status_code=403, detail="Unknown user type")
+
+    if current_user.user_id == user2_id:
+        raise HTTPException(status_code=400, detail="You can't create a chat with yourself")
 
     # Проверяем, есть ли уже такой чат
     existing_chat = db.query(Chat).filter(
-        ((Chat.user1_id == chat_data.user1_id) & (Chat.user2_id == chat_data.user2_id)) |
-        ((Chat.user1_id == chat_data.user2_id) & (Chat.user2_id == chat_data.user1_id)),
+        ((Chat.user1_id == current_user.user_id) & (Chat.user2_id == user2_id)) |
+        ((Chat.user1_id == user2_id) & (Chat.user2_id == current_user.user_id)),
         Chat.task_id == chat_data.task_id
     ).first()
 
@@ -49,16 +49,12 @@ def create_chat(
         return {"message": "Chat already exists", "chat_id": existing_chat.chat_id}
 
     # Создаем новый чат
-    new_chat = Chat(
-        user1_id=chat_data.user1_id,
-        user2_id=chat_data.user2_id,
-        task_id=chat_data.task_id
-    )
+    new_chat = Chat(**chat_data.dict(), user1_id=current_user.user_id, user2_id=user2_id)
     db.add(new_chat)
     db.commit()
     db.refresh(new_chat)
 
-    return new_chat
+    return {"message": "Chat created", "chat_id": new_chat.chat_id}
 
 
 @router.post("/{chat_id}/messages", response_model=MessageResponse)
@@ -66,155 +62,101 @@ def send_message(
     chat_id: int,
     message_data: MessageCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """
-    Отправить сообщение в чат
+    Отправка сообщения в чат
     """
-
-    # Проверяем, существует ли чат
     chat = db.query(Chat).filter(Chat.chat_id == chat_id).first()
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
 
-    # Проверяем, является ли пользователь участником чата
     if current_user.user_id not in [chat.user1_id, chat.user2_id]:
         raise HTTPException(status_code=403, detail="You are not a participant of this chat")
 
-    # Создаем новое сообщение
-    new_message = Message(
-        chat_id=chat_id,
-        sender_id=current_user.user_id,
-        content=message_data.content
-    )
+    new_message = Message(chat_id=chat_id, sender_id=current_user.user_id, content=message_data.content)
     db.add(new_message)
     db.commit()
     db.refresh(new_message)
 
-    # Создаем уведомление для другого участника чата
+    # Уведомляем другого пользователя
     other_user_id = chat.user1_id if chat.user2_id == current_user.user_id else chat.user2_id
-    new_notification = Notification(
-        user_id=other_user_id,
-        message=f"Новое сообщение от {current_user.first_name} в чате по задаче",
-        is_read=False
+    create_notification(
+        db=db,
+        notification_data=dict(
+            user_id=other_user_id,
+            message=f"Новое сообщение от {current_user.first_name} в чате",
+            related_entity_type="chat",
+            related_entity_id=new_message.message_id
+        )
     )
-    db.add(new_notification)
-    db.commit()
 
     return new_message
 
 
 @router.get("/{task_id}/messages", response_model=list[MessageResponse])
-def get_messages(
+def get_messages_by_task(
     task_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """
-    Получить все сообщения из чата, связанные с задачей
+    Получить все сообщения по задаче
     """
-
-    # Проверяем, существует ли задача
-    task = db.query(Task).filter(Task.task_id == task_id).first()
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-
-    # Проверяем, является ли пользователь участником задачи
-    if current_user.user_id not in [task.employer_id, task.freelancer_id]:
-        raise HTTPException(status_code=403, detail="You are not a participant of this task")
-
-    # Получаем чат, связанный с задачей
     chat = db.query(Chat).filter(Chat.task_id == task_id).first()
     if not chat:
-        raise HTTPException(status_code=404, detail="No chat found for this task")
+        raise HTTPException(status_code=404, detail="No chat for this task")
 
-    # Получаем сообщения
+    if current_user.user_id not in [chat.user1_id, chat.user2_id]:
+        raise HTTPException(status_code=403, detail="You are not a participant of this chat")
+
     messages = db.query(Message).filter(Message.chat_id == chat.chat_id).all()
     return messages
 
 
-@router.get("/me", response_model=list[dict])
-def get_my_chats(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Получить список всех чатов текущего пользователя
-    """
-    chats = db.query(Chat).join(Task).filter(
-        ((Chat.user1_id == current_user.user_id) | (Chat.user2_id == current_user.user_id))
-    ).all()
-
-    result = []
-    for chat in chats:
-        other_user_id = chat.user1_id if chat.user2_id == current_user.user_id else chat.user2_id
-        other_user = db.query(User).filter(User.user_id == other_user_id).first()
-
-        result.append({
-            "chat_id": chat.chat_id,
-            "with_user": {
-                "user_id": other_user.user_id,
-                "email": other_user.email,
-                "first_name": other_user.first_name,
-                "last_name": other_user.last_name,
-                "user_type": other_user.user_type
-            },
-            "task_id": chat.task_id,
-            "created_at": chat.created_at
-        })
-
-    return result
-
-
-@router.put("/{chat_id}/messages/{message_id}")
-def edit_message(
+@router.websocket("/ws/{chat_id}/{token}")
+async def websocket_endpoint(
+    websocket: WebSocket,
     chat_id: int,
-    message_id: int,
-    new_content: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    token: str,
+    db: Session = Depends(get_db)
 ):
     """
-    Редактировать собственное сообщение
+    Подключение к чату через WebSocket
     """
+    try:
+        payload = jwt.decode(token, os.getenv("SECRET_KEY"), algorithms=[os.getenv("ALGORITHM")])
+        email: str = payload.get("sub")
+        if email is None:
+            await websocket.close(code=4000)
+            return
 
-    message = db.query(Message).filter(
-        Message.message_id == message_id,
-        Message.chat_id == chat_id,
-        Message.sender_id == current_user.user_id
-    ).first()
+        current_user = db.query(User).filter(User.email == email).first()
+        if not current_user:
+            await websocket.close(code=4000)
+            return
 
-    if not message:
-        raise HTTPException(status_code=404, detail="Message not found")
+        chat = db.query(Chat).filter(Chat.chat_id == chat_id).first()
+        if not chat or current_user.user_id not in [chat.user1_id, chat.user2_id]:
+            await websocket.close(code=4000)
+            return
 
-    message.content = new_content
-    db.commit()
-    db.refresh(message)
+        await websocket.accept()
 
-    return message
+        while True:
+            data = await websocket.receive_text()
+            new_message = Message(chat_id=chat_id, sender_id=current_user.user_id, content=data)
+            db.add(new_message)
+            db.commit()
+            db.refresh(new_message)
 
+            await websocket.send_json({
+                "sender_id": current_user.user_id,
+                "content": data,
+                "created_at": datetime.now().isoformat(),
+                "is_read": False
+            })
 
-@router.delete("/{chat_id}/messages/{message_id}")
-def delete_message(
-    chat_id: int,
-    message_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Удалить сообщение
-    """
-
-    message = db.query(Message).filter(
-        Message.message_id == message_id,
-        Message.chat_id == chat_id,
-        Message.sender_id == current_user.user_id
-    ).first()
-
-    if not message:
-        raise HTTPException(status_code=404, detail="Message not found")
-
-    db.delete(message)
-    db.commit()
-
-    return {"message": "Message deleted"}
+    except Exception as e:
+        print(f"WebSocket error: {e}")
+        await websocket.close(code=4000)

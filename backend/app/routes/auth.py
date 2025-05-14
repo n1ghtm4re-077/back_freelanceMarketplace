@@ -3,28 +3,36 @@ from sqlalchemy.orm import Session
 
 from backend.app.models import User
 from backend.app.schemas import UserCreate
-from backend.app.auth import get_password_hash, create_access_token, verify_password
+from backend.app.auth import get_password_hash, create_access_token
 from backend.app.database import get_db
+from backend.app.auth import verify_password
 
-router = APIRouter()
+router = APIRouter(prefix="/auth", tags=["Auth"])
 
 @router.post("/register")
 def register(user: UserCreate, db: Session = Depends(get_db)):
-    # Проверяем, существует ли пользователь
-    db_user = db.query(User).filter(User.email == user.email).first()
-    if db_user:
+
+    existing_user = db.query(User).filter(User.email == user.email).first()
+    if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    # Хэшируем пароль
+
     hashed_password = get_password_hash(user.password)
 
-    # Создаем нового пользователя
-    new_user = User(email=user.email, password_hash=hashed_password)
+
+    new_user = User(
+        email=user.email,
+        password_hash=hashed_password,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        user_type=user.user_type,
+    )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
-    return {"message": "User created successfully"}
+    return {"message": "User created successfully", "user_id": new_user.user_id}
+
 
 @router.post("/login")
 def login(email: str, password: str, db: Session = Depends(get_db)):

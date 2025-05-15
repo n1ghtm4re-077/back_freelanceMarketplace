@@ -114,49 +114,43 @@ def get_messages_by_task(
     return messages
 
 
-@router.websocket("/ws/{chat_id}/{token}")
-async def websocket_endpoint(
+@router.websocket("/ws/{chat_id}")
+async def websocket_chat(
     websocket: WebSocket,
     chat_id: int,
-    token: str,
     db: Session = Depends(get_db)
 ):
     """
-    Подключение к чату через WebSocket
+    WebSocket для чата между участниками задачи
     """
+
+    await websocket.accept()
+
+    chat = db.query(Chat).filter(Chat.chat_id == chat_id).first()
+    if not chat:
+        await websocket.close(code=4000)
+        return
+
     try:
-        payload = jwt.decode(token, os.getenv("SECRET_KEY"), algorithms=[os.getenv("ALGORITHM")])
-        email: str = payload.get("sub")
-        if email is None:
-            await websocket.close(code=4000)
-            return
-
-        current_user = db.query(User).filter(User.email == email).first()
-        if not current_user:
-            await websocket.close(code=4000)
-            return
-
-        chat = db.query(Chat).filter(Chat.chat_id == chat_id).first()
-        if not chat or current_user.user_id not in [chat.user1_id, chat.user2_id]:
-            await websocket.close(code=4000)
-            return
-
-        await websocket.accept()
-
         while True:
             data = await websocket.receive_text()
-            new_message = Message(chat_id=chat_id, sender_id=current_user.user_id, content=data)
+            new_message = Message(
+                chat_id=chat_id,
+                sender_id=websocket.headers.get("user_id"),  # или получай из токена
+                content=data
+            )
             db.add(new_message)
             db.commit()
             db.refresh(new_message)
 
+            # Отправляем сообщение всем участникам чата
             await websocket.send_json({
-                "sender_id": current_user.user_id,
-                "content": data,
-                "created_at": datetime.now().isoformat(),
-                "is_read": False
+                "message_id": new_message.message_id,
+                "sender_id": new_message.sender_id,
+                "content": new_message.content,
+                "created_at": str(new_message.created_at)
             })
 
     except Exception as e:
         print(f"WebSocket error: {e}")
-        await websocket.close(code=4000)
+        await websocket.close()

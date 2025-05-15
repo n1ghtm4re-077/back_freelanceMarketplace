@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.models import User, FreelancerProfile, EmployerProfile
 from backend.app.schemas import UserResponse
+from operator import or_
 from backend.app.auth import get_current_user
 from backend.app.database import get_db
 
@@ -116,3 +117,31 @@ def update_profile(
     db.commit()
     db.refresh(profile)
     return {"message": "Profile updated", "profile": profile}
+
+@router.get("/freelancers")
+def search_freelancers(
+    name_or_skills: str = None,
+    category: str = None,
+    min_experience: int = 0,
+    db: Session = Depends(get_db)
+):
+    """
+    Поиск фрилансеров по имени, навыкам, категории и опыту
+    """
+    freelancers = db.query(User).filter(User.user_type == "freelancer")
+
+    if name_or_skills:
+        freelancers = freelancers.filter(
+            or_(
+                User.first_name.ilike(f"%{name_or_skills}%"),
+                User.last_name.ilike(f"%{name_or_skills}%")
+            )
+        )
+
+    if category:
+        freelancers = freelancers.filter(User.category == category)
+
+    if min_experience:
+        freelancers = freelancers.filter(User.experience >= min_experience)
+
+    return freelancers.all()

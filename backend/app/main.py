@@ -12,7 +12,12 @@ import uvicorn
 
 models.Base.metadata.create_all(bind=database.engine)
 
-app = FastAPI()
+app = FastAPI(
+    title="FreelanceHub API",
+    description="API для платформы фрилансеров и работодателей",
+    version="1.0.0",
+    openapi_tags=[...]
+)
 
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 
@@ -27,6 +32,14 @@ app.include_router(reviews_router)
 @app.get("/profile/me")
 def read_users_me(current_user: User = Depends(get_current_user)):
     return {
+        "user_id": current_user.user_id,
         "email": current_user.email,
-        "user_id": current_user.user_id
+        "first_name": current_user.first_name,
+        "last_name": current_user.last_name,
+        "user_type": current_user.user_type,
+        "created_at": current_user.created_at
     }
+
+
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

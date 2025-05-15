@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import and_, or_
 
 from backend.app.models import Task, User, Category, Bid
 from backend.app.schemas import TaskCreate, TaskResponse, TaskUpdate, BidResponse
@@ -48,7 +49,7 @@ def read_task(task_id: int, db: Session = Depends(get_db)):
 @router.get("/me", response_model=list[TaskResponse])
 def read_my_tasks(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
-    Получение задач, созданных пользователем (заказчиком) или назначенных фрилансеру
+    Получение задач, созданных пользователем или назначенных ему
     """
     if current_user.user_type == "employer":
         tasks = db.query(Task).filter(Task.employer_id == current_user.user_id).all()
@@ -61,11 +62,60 @@ def read_my_tasks(db: Session = Depends(get_db), current_user: User = Depends(ge
 
 
 @router.get("/", response_model=list[TaskResponse])
-def read_tasks(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def list_tasks(
+    skip: int = 0,
+    limit: int = 100,
+    category_id: int = None,
+    min_budget: float = None,
+    max_budget: float = None,
+    status: str = None,
+    deadline_gte: str = None,   # Дата в формате YYYY-MM-DD
+    deadline_lte: str = None,   # Дата в формате YYYY-MM-DD
+    db: Session = Depends(get_db)
+):
     """
-    Получить список задач с пагинацией
+    Получить список задач с фильтрами:
+    - category_id
+    - min_budget / max_budget
+    - status
+    - deadline_gte (после этой даты)
+    - deadline_lte (до этой даты)
     """
-    tasks = db.query(Task).offset(skip).limit(limit).all()
+
+    query = db.query(Task)
+
+    # Фильтрация по категории
+    if category_id:
+        query = query.filter(Task.category_id == category_id)
+
+    # Фильтрация по бюджету
+    if min_budget is not None:
+        query = query.filter(Task.budget >= min_budget)
+    if max_budget is not None:
+        query = query.filter(Task.budget <= max_budget)
+
+    # Фильтрация по статусу
+    if status:
+        query = query.filter(Task.status == status)
+
+    # Фильтрация по дедлайну
+    from datetime import datetime
+    if deadline_gte:
+        try:
+            date = datetime.strptime(deadline_gte, "%Y-%m-%d")
+            query = query.filter(Task.deadline >= date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format for deadline_gte. Use YYYY-MM-DD")
+
+    if deadline_lte:
+        try:
+            date = datetime.strptime(deadline_lte, "%Y-%m-%d")
+            query = query.filter(Task.deadline <= date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format for deadline_lte. Use YYYY-MM-DD")
+
+    # Применяем пагинацию
+    tasks = query.offset(skip).limit(limit).all()
     return tasks
 
 
@@ -77,7 +127,7 @@ def update_task(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Обновление задачи (только автором задачи)
+    Обновление задачи (только автором)
     """
     task = db.query(Task).filter(Task.task_id == task_id).first()
     if not task:
@@ -102,7 +152,7 @@ def delete_task(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Удаление задачи (только автором)
+    Удаление задачи (только владельцем)
     """
     task = db.query(Task).filter(Task.task_id == task_id).first()
     if not task:

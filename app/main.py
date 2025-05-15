@@ -1,12 +1,10 @@
-from fastapi import FastAPI, Depends, HTTPException
-from sqlalchemy.orm import Session
-from . import models, schemas, database
+from fastapi import FastAPI, Depends
+from . import models, database
 from app.routes.auth import router as auth_router
 from app.routes.reviews import router as reviews_router
 from app.auth import get_current_user
-from app.models import User, Task, Chat, Message, Notification
+from app.models import User
 from app.routes import auth, tasks, bids, chats, notifications, users
-from app.database import Base, engine
 
 import uvicorn
 

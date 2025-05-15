@@ -40,6 +40,5 @@ def read_users_me(current_user: User = Depends(get_current_user)):
         "created_at": current_user.created_at
     }
 
-
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

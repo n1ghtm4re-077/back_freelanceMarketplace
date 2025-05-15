@@ -6,7 +6,7 @@ from sqlalchemy import (
 from sqlalchemy import func
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
-from backend.app.database import Base
+from app.database import Base
 
 
 class User(Base):

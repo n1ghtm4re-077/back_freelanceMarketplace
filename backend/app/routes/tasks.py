@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
 
-from backend.app.models import Task, User, Category, Bid
-from backend.app.schemas import TaskCreate, TaskResponse, TaskUpdate, BidResponse
-from backend.app.auth import get_current_user
-from backend.app.database import get_db
+from app.models import Task, User, Category, Bid
+from app.schemas import TaskCreate, TaskResponse, TaskUpdate, BidResponse
+from app.auth import get_current_user
+from app.database import get_db
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 

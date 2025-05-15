@@ -5,12 +5,12 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, status
 from jose import jwt
 from sqlalchemy.orm import Session
 
-from backend.app.models import Chat, Task, Message, User
-from backend.app.schemas import ChatCreate, MessageCreate, MessageResponse
-from backend.app.auth import get_current_user
-from backend.app.database import get_db
-from backend.app.models import Notification
-from backend.app.routes.notifications import create_notification
+from app.models import Chat, Task, Message, User
+from app.schemas import ChatCreate, MessageCreate, MessageResponse
+from app.auth import get_current_user
+from app.database import get_db
+from app.models import Notification
+from app.routes.notifications import create_notification
 
 router = APIRouter(prefix="/chats", tags=["Chats"])
 

@@ -9,9 +9,9 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 
-from backend.app.schemas import TokenData
-from backend.app.models import User
-from backend.app.database import get_db
+from app.schemas import TokenData
+from app.models import User
+from app.database import get_db
 
 
 SECRET_KEY = "your-secret-key-here"
